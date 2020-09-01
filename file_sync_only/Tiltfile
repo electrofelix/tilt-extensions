@@ -11,9 +11,18 @@ def file_sync_only(image='', manifests=[], deps=["."], live_update=[]):
     # "nginx:1.17" => return "nginx" and "1.17"
     deployed_image, deployed_tag = _get_current_tag(image, manifests)
 
-    # ":" is null command 
-    custom_build(deployed_image, ':',
-        tag=deployed_tag,
+    # Check if tilt is using a different image registry.
+    # If it is, we have to re-tag and re-push the image.
+    build_script = """
+if [ "$EXPECTED_REF" != "%s*" ]; then
+  docker pull %s
+  docker tag %s $EXPECTED_REF
+  docker push $EXPECTED_REF
+fi
+""" % (deployed_image, deployed_image, deployed_image)
+
+    custom_build(deployed_image,
+                 build_script,
         deps=deps,
         skips_local_docker=True,
         live_update=live_update
@@ -53,6 +62,6 @@ def _first_sync_from_liveupdate(image, live_update):
 # return sync(local_path, remote_path)'s args
 def _get_sync_params(sync):
     output = str(sync).split("'")
-    local_path = output[1].replace("/private/tmp/test/", "")
+    local_path = output[1].replace(os.getcwd() + "/", "")
     remote_path = output[3]
     return local_path, remote_path
